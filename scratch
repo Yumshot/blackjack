@@ -1,0 +1,131 @@
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_calculate_player_value() {
+        let mut game = Game::new();
+        game.player_hit();
+        game.player_hit();
+        assert_eq!(game.calculate_player_value(), 20);
+    }
+
+    #[test]
+    fn test_calculate_dealer_value() {
+        let mut game = Game::new();
+        game.dealer_hit();
+        game.dealer_hit();
+        assert_eq!(game.calculate_dealer_value(), 20);
+    }
+
+    #[test]
+    fn test_game_state_transition_from_menu_to_player_turn() {
+        let mut game = Game::new();
+        assert_eq!(game.game_state, GameState::Menu);
+        game.player_hit();
+        game.player_hit();
+        assert_eq!(game.game_state, GameState::PlayerTurn);
+    }
+
+    #[test]
+    fn test_game_state_transition_from_player_turn_to_dealer_turn() {
+        let mut game = Game::new();
+        game.player_hit();
+        game.player_hit();
+        assert_eq!(game.game_state, GameState::PlayerTurn);
+        game.game_state = GameState::DealerTurn;
+        assert_eq!(game.game_state, GameState::DealerTurn);
+    }
+
+    #[test]
+    fn test_game_state_transition_from_dealer_turn_to_player_won() {
+        let mut game = Game::new();
+        game.player_hit();
+        game.player_hit();
+        assert_eq!(game.game_state, GameState::PlayerTurn);
+        game.game_state = GameState::DealerTurn;
+        assert_eq!(game.game_state, GameState::DealerTurn);
+        game.game_state = GameState::PlayerWon;
+        assert_eq!(game.game_state, GameState::PlayerWon);
+    }
+
+    #[test]
+    fn test_game_state_transition_from_dealer_turn_to_dealer_won() {
+        let mut game = Game::new();
+        game.player_hit();
+        game.player_hit();
+        assert_eq!(game.game_state, GameState::PlayerTurn);
+        game.game_state = GameState::DealerTurn;
+        assert_eq!(game.game_state, GameState::DealerTurn);
+        game.game_state = GameState::DealerWon;
+        assert_eq!(game.game_state, GameState::DealerWon);
+    }
+
+    #[test]
+    fn test_game_state_transition_from_dealer_turn_to_tie() {
+        let mut game = Game::new();
+        game.player_hit();
+        game.player_hit();
+        assert_eq!(game.game_state, GameState::PlayerTurn);
+        game.game_state = GameState::DealerTurn;
+        assert_eq!(game.game_state, GameState::DealerTurn);
+        game.game_state = GameState::Tie;
+        assert_eq!(game.game_state, GameState::Tie);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_calculate_hand_value() {
+        let hand = vec![
+            Card { rank: Rank::Ace, suit: Suit::Hearts },
+            Card { rank: Rank::Ace, suit: Suit::Diamonds },
+            Card { rank: Rank::Ace, suit: Suit::Clubs },
+            Card { rank: Rank::Ace, suit: Suit::Spades }
+        ];
+
+        let value = calculate_hand_value(&hand);
+        assert_eq!(value, 44);
+    }
+
+    #[test]
+    fn test_calculate_hand_value_with_non_aces() {
+        let hand = vec![
+            Card { rank: Rank::Two, suit: Suit::Hearts },
+            Card { rank: Rank::Three, suit: Suit::Diamonds },
+            Card { rank: Rank::Four, suit: Suit::Clubs },
+            Card { rank: Rank::Five, suit: Suit::Spades }
+        ];
+
+        let value = calculate_hand_value(&hand);
+        assert_eq!(value, 14);
+    }
+
+    #[test]
+    fn test_calculate_hand_value_with_aces_and_non_aces() {
+        let hand = vec![
+            Card { rank: Rank::Ace, suit: Suit::Hearts },
+            Card { rank: Rank::Two, suit: Suit::Diamonds },
+            Card { rank: Rank::Three, suit: Suit::Clubs },
+            Card { rank: Rank::Four, suit: Suit::Spades }
+        ];
+
+        let value = calculate_hand_value(&hand);
+        assert_eq!(value, 18);
+    }
+
+    #[test]
+    fn test_calculate_hand_value_with_aces_and_non_aces_and_busting() {
+        let hand = vec![
+            Card { rank: Rank::Ace, suit: Suit::Hearts },
+            Card { rank: Rank::Ace, suit: Suit::Diamonds },
+            Card { rank: Rank::Ten, suit: Suit::Clubs }
+        ];
+
+        let value = calculate_hand_value(&hand);
+        assert_eq!(value, 12);
+    }
+}
