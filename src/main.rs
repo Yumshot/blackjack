@@ -2,6 +2,8 @@ mod cards;
 mod game;
 mod ui;
 
+use std::time::Instant;
+
 use macroquad::prelude::*;
 use crate::ui::{ draw_centered_text, draw_hand, load_card_images };
 use crate::game::{ Game, GameState };
@@ -9,8 +11,10 @@ use crate::game::{ Game, GameState };
 #[macroquad::main("Blackjack")]
 async fn main() {
     let custom_font = load_ttf_font("assets/fonts/font.ttf").await.unwrap();
+    let start = Instant::now();
     let card_images = load_card_images().await;
-
+    let duration = start.elapsed();
+    println!("Image Loading took: {:?}", duration);
     let mut game = Game::new();
 
     loop {
