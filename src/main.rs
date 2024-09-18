@@ -35,15 +35,12 @@ struct Card {
 }
 
 struct Deck(Vec<Card>);
-
 struct PlayerHand(Vec<Card>);
-
 struct DealerHand(Vec<Card>);
 
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
 enum GameState {
     Menu,
-    InProgress,
     PlayerTurn,
     DealerTurn,
     PlayerWon,
@@ -117,7 +114,6 @@ fn calculate_hand_value(hand: &[Card]) -> i32 {
     value
 }
 
-// Helper function to generate the image filename for a card
 fn card_image_filename(card: Card) -> String {
     let rank_str = match card.rank {
         Rank::Two => "2",
@@ -142,10 +138,9 @@ fn card_image_filename(card: Card) -> String {
         Suit::Spades => "spades",
     };
 
-    format!("assets\\images\\{}{}.png", rank_str, suit_str)
+    format!("assets/images/{}{}.png", rank_str, suit_str)
 }
 
-// Load all card images into a HashMap
 async fn load_card_images() -> HashMap<String, Texture2D> {
     let mut images = HashMap::new();
     for suit in &[Suit::Hearts, Suit::Diamonds, Suit::Clubs, Suit::Spades] {
@@ -166,14 +161,8 @@ async fn load_card_images() -> HashMap<String, Texture2D> {
         ] {
             let card = Card { rank: *rank, suit: *suit };
             let filename = card_image_filename(card);
-
-            match load_texture(&filename).await {
-                Ok(texture) => {
-                    images.insert(filename, texture);
-                }
-                Err(_) => {
-                    eprintln!("Failed to load image: {}", filename); // Log the error
-                }
+            if let Ok(texture) = load_texture(&filename).await {
+                images.insert(filename, texture);
             }
         }
     }
@@ -191,24 +180,49 @@ fn draw_centered_text(text: &str, y: f32, font_size: u16, color: Color, font: Op
     });
 }
 
-// Draw a hand of cards using the card images
-fn draw_hand(hand: &[Card], y: f32, images: &HashMap<String, Texture2D>, max_width: f32) {
+async fn draw_hand(
+    hand: &[Card],
+    y: f32,
+    images: &HashMap<String, Texture2D>,
+    max_width: f32,
+    show_all: bool
+) {
     let card_width = 70.0;
+    let card_height = 100.0;
     let total_width = card_width * (hand.len() as f32);
     let start_x = (max_width - total_width) / 2.0;
 
-    for (i, card) in hand.iter().enumerate() {
+    let cards_to_show = if show_all { hand.len() } else { 1 };
+
+    for (i, card) in hand.iter().take(cards_to_show).enumerate() {
         let filename = card_image_filename(*card);
         if let Some(texture) = images.get(&filename) {
-            draw_texture(&*texture, start_x + (i as f32) * card_width, y, WHITE);
+            draw_texture_ex(
+                &*texture,
+                start_x + (i as f32) * card_width,
+                y,
+                WHITE,
+                DrawTextureParams {
+                    dest_size: Some(vec2(card_width, card_height)),
+                    ..Default::default()
+                }
+            );
         }
+    }
+
+    if !show_all && hand.len() > 1 {
+        let hidden_card_texture = load_texture("assets/images/cardback.png").await.unwrap();
+        draw_texture_ex(&hidden_card_texture, start_x + card_width, y, WHITE, DrawTextureParams {
+            dest_size: Some(vec2(card_width, card_height)),
+            ..Default::default()
+        });
     }
 }
 
 #[macroquad::main("Blackjack")]
 async fn main() {
-    let custom_font = load_ttf_font("assets\\fonts\\font.ttf").await.unwrap();
-    let card_images = load_card_images().await; // Load the card images
+    let custom_font = load_ttf_font("assets/fonts/font.ttf").await.unwrap();
+    let card_images = load_card_images().await;
 
     let mut game_state = GameState::Menu;
     let mut deck = Deck::new();
@@ -218,11 +232,9 @@ async fn main() {
     loop {
         clear_background(BLACK);
 
-        // Get current screen size
         let screen_width = screen_width();
         let screen_height = screen_height();
 
-        // Calculate dynamic font sizes based on screen height (responsive)
         let title_font_size = screen_height * 0.05;
         let normal_font_size = screen_height * 0.03;
 
@@ -255,19 +267,31 @@ async fn main() {
             GameState::PlayerTurn => {
                 let player_value = calculate_hand_value(&player_hand.0);
 
-                // Display player's hand
-                draw_hand(&player_hand.0, screen_height * 0.6, &card_images, screen_width);
+                draw_hand(
+                    &dealer_hand.0,
+                    screen_height * 0.4,
+                    &card_images,
+                    screen_width,
+                    false
+                ).await;
+                draw_hand(
+                    &player_hand.0,
+                    screen_height * 0.7,
+                    &card_images,
+                    screen_width,
+                    true
+                ).await;
 
                 draw_centered_text(
                     &format!("Player Hand Value: {}", player_value),
-                    screen_height * 0.5,
+                    screen_height * 0.65,
                     normal_font_size as u16,
                     WHITE,
                     Some(&custom_font)
                 );
                 draw_centered_text(
                     "Press SPACE to hit or ENTER to hold",
-                    screen_height * 0.65,
+                    screen_height * 0.95,
                     normal_font_size as u16,
                     WHITE,
                     Some(&custom_font)
@@ -287,8 +311,20 @@ async fn main() {
             }
 
             GameState::DealerTurn => {
-                // Display dealer's hand
-                draw_hand(&dealer_hand.0, screen_height * 0.3, &card_images, screen_width);
+                draw_hand(
+                    &dealer_hand.0,
+                    screen_height * 0.3,
+                    &card_images,
+                    screen_width,
+                    true
+                ).await;
+                draw_hand(
+                    &player_hand.0,
+                    screen_height * 0.6,
+                    &card_images,
+                    screen_width,
+                    true
+                ).await;
 
                 while calculate_hand_value(&dealer_hand.0) < 17 {
                     if let Some(card) = deck.draw() {
@@ -308,18 +344,32 @@ async fn main() {
                 }
             }
 
-            // Handle Win/Loss/Tie States
             GameState::PlayerWon => {
+                draw_hand(
+                    &dealer_hand.0,
+                    screen_height * 0.3,
+                    &card_images,
+                    screen_width,
+                    true
+                ).await;
+                draw_hand(
+                    &player_hand.0,
+                    screen_height * 0.6,
+                    &card_images,
+                    screen_width,
+                    true
+                ).await;
+
                 draw_centered_text(
                     "Player Won!",
-                    screen_height * 0.3,
+                    screen_height * 0.25,
                     title_font_size as u16,
                     WHITE,
                     Some(&custom_font)
                 );
                 draw_centered_text(
                     "Press R to restart",
-                    screen_height * 0.4,
+                    screen_height * 0.5,
                     normal_font_size as u16,
                     WHITE,
                     Some(&custom_font)
@@ -333,16 +383,31 @@ async fn main() {
             }
 
             GameState::DealerWon => {
+                draw_hand(
+                    &dealer_hand.0,
+                    screen_height * 0.3,
+                    &card_images,
+                    screen_width,
+                    true
+                ).await;
+                draw_hand(
+                    &player_hand.0,
+                    screen_height * 0.6,
+                    &card_images,
+                    screen_width,
+                    true
+                ).await;
+
                 draw_centered_text(
                     "Dealer Won!",
-                    screen_height * 0.3,
+                    screen_height * 0.25,
                     title_font_size as u16,
                     WHITE,
                     Some(&custom_font)
                 );
                 draw_centered_text(
                     "Press R to restart",
-                    screen_height * 0.4,
+                    screen_height * 0.5,
                     normal_font_size as u16,
                     WHITE,
                     Some(&custom_font)
@@ -356,6 +421,21 @@ async fn main() {
             }
 
             GameState::Tie => {
+                draw_hand(
+                    &dealer_hand.0,
+                    screen_height * 0.3,
+                    &card_images,
+                    screen_width,
+                    true
+                ).await;
+                draw_hand(
+                    &player_hand.0,
+                    screen_height * 0.6,
+                    &card_images,
+                    screen_width,
+                    true
+                ).await;
+
                 draw_centered_text(
                     "It's a Tie!",
                     screen_height * 0.3,
@@ -377,7 +457,6 @@ async fn main() {
                     game_state = GameState::Menu;
                 }
             }
-            GameState::InProgress => {}
         }
 
         next_frame().await;
